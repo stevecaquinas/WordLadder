@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Word Ladder — Auto Puzzle</title>
+  <style>
+    :root { --bg:#0b1020; --card:#141a32; --ink:#e8ebff; --muted:#9aa3c7; --accent:#7aa2ff; --good:#27d17f; --bad:#ff5d73; --warn:#ffb020; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background: radial-gradient(1200px 800px at 20% 0%, #0f1640, #0b1020); color: var(--ink); }
+    header { padding: 18px 20px; display:flex; align-items:center; gap:12px; border-bottom: 1px solid #1c2447; position: sticky; top:0; backdrop-filter: blur(8px); background: rgba(11,16,32,0.6); z-index: 5; }
+    header h1 { font-size: 18px; margin:0; letter-spacing: .4px; }
+    .tag { font-size:12px; padding:4px 8px; border-radius:999px; background: #20264a; color: var(--muted); border:1px solid #2a3160; }
+    main { max-width: 920px; margin: 20px auto; padding: 16px; display:grid; grid-template-columns: 1fr 360px; gap: 18px; }
+    @media (max-width: 900px){ main{ grid-template-columns: 1fr; } }
+
+    .card { background: var(--card); border:1px solid #1c2447; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .panel { padding: 16px; }
+
+    .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .controls .row { display:flex; gap:10px; align-items:center; }
+    select, button, input[type="text"] { background:#0f1530; border:1px solid #263064; color:var(--ink); padding:10px 12px; border-radius: 12px; font-size: 14px; outline: none; }
+    select:focus, button:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(122,162,255,0.25); }
+    button { cursor: pointer; transition: transform .06s ease, background .2s ease; }
+    button:hover { background:#0d1228; }
+    button:active { transform: translateY(1px); }
+    .primary { background: linear-gradient(180deg, #263b8e, #213579); border-color:#2e4ab7; }
+    .ghost { background: transparent; }
+
+    .ladder { padding: 14px; display:flex; flex-direction:column; gap: 10px; }
+    .rung { display:grid; grid-template-columns: 1fr 36px; align-items:center; gap:8px; padding: 10px; border:1px dashed #2a3160; border-radius: 12px; }
+    .rung.fixed { border-style: solid; border-color:#2e4ab7; background: #101637; }
+    .rung .idx { width: 28px; height: 28px; display:grid; place-items:center; border-radius: 8px; background:#0e1430; border:1px solid #2a3160; font-size: 12px; color: var(--muted); }
+
+    .wordbox { display:flex; gap:8px; }
+    .char { width: 44px; height: 48px; display:grid; place-items:center; border-radius: 10px; font-weight: 700; letter-spacing: 1px; font-size: 22px; text-transform: uppercase; background:#0b112b; border:1px solid #233064; }
+    .char.err { border-color: var(--bad); box-shadow: inset 0 0 0 2px rgba(255,93,115,.25); }
+    .char.ok  { border-color: var(--good); }
+    .rung .msg { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+    .note { font-size: 13px; color: var(--muted); }
+    .hint { color: var(--warn); }
+
+    .sidebar { display:flex; flex-direction:column; gap:12px; }
+    .stat { display:flex; align-items:center; justify-content:space-between; padding:12px; border-radius:12px; border:1px solid #22305d; background:#0f1530; }
+    .stat b { font-size: 18px; }
+    .log { max-height: 260px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; padding: 12px; border-radius: 12px; background:#0f1530; border:1px solid #22305d; white-space: pre-wrap; }
+
+    .divider { height:1px; background:#1c2447; margin: 12px 0; }
+    footer { max-width:920px; margin: 0 auto 24px; padding: 0 16px; color: var(--muted); font-size: 12px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Word Ladder</h1>
+    <span class="tag">Auto‑generated puzzles</span>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="panel">
+        <div class="controls" role="region" aria-label="Controls">
+          <div class="row">
+            <label for="length">Word length</label>
+            <select id="length" aria-label="Word length">
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+          <div class="row">
+            <button id="new" class="primary">New Puzzle</button>
+            <button id="hint" class="ghost">Hint</button>
+            <button id="giveup" class="ghost">Give Up</button>
+          </div>
+          <div class="row">
+            <span class="note">Type each missing rung; each step must change <b>exactly one letter</b> and be a valid word.</span>
+          </div>
+        </div>
+      </div>
+      <div id="ladder" class="ladder" aria-live="polite"></div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="card panel">
+        <div class="stat"><span>Puzzles solved</span><b id="wins">0</b></div>
+        <div class="stat"><span>Best streak</span><b id="streak">0</b></div>
+        <div class="stat"><span>Current streak</span><b id="cstreak">0</b></div>
+      </div>
+      <div class="card panel">
+        <b>Activity</b>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
+      <div class="card panel">
+        <b>Options</b>
+        <div class="divider"></div>
+        <label><input type="checkbox" id="hardmode" /> Hard mode (no hints)</label>
+        <p class="note">Hard mode disables hints and forces each guess to be part of <i>some</i> shortest path.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    Built with vanilla HTML/CSS/JS. Word lists are embedded for offline play. Feel free to expand the dictionary for richer puzzles.
+  </footer>
+
+<script>
+// --- Small embedded dictionaries (expand as you like) ---
+// Keep lists modest for demo. All lowercase.
+const WORDS_3 = [
+  'cat','bat','bet','bed','bad','had','hid','him','him','hip','sip','sap','sap','sap','map','man','men','hen','pen','pan','can','cap','cop','cup','cub','tub','rub','rug','rag','tag','tan','tin','win','won','one','ore','are','ape','ape','age','ago','ego'
+].filter((v,i,a)=>a.indexOf(v)===i);
+
+const WORDS_4 = [
+  'cold','cord','card','ward','warm','sold','told','toll','tall','tail','bail','bald','bold','gold','golf','wolf','wool','pool','poll','pole','pale','sale','sane','sand','hand','hard','hare','care','core','cure','sure','sore','sire','fire','five','hive','give','gave','gate','date','data','beta','meta','mate','made','maze','gaze','gaze','faze','fade','bade','bide','bike','hike','like','lake','bake','cake','cane','lane','late','fate','rate','rake','take','tale','tile','time','tame','same','some','home','hone','bone','cone','code','coda','coda','cola','cola','cola','coal','goal','goad','toad','road','roam','foam','form','farm','harm','warm','worm','word','ward','card','care','cane','lane','line','lion','iron','icon','ikon','ikon','ikon','akin','skin','spin','span','spun','stun','stun','stud','slid','slide','glide','guide','guise','guis','suit','sour','pour','pour','poor','door','doom','boom','book','cook','cool','fool','foot','soot','shot','shop','slop','slap','swap','snap','snip','ship','chip','chap','char','star','scar','scar','scab','stab','slab','slam','slim','slit','split','spilt','spilt','spilt'
+].filter(w=>/^[a-z]{4}$/.test(w)).filter((v,i,a)=>a.indexOf(v)===i);
+
+const WORDS_5 = [
+  'stone','stoke','smoke','spoke','spore','score','scare','share','shore','short','shout','scout','about','abode','abide','aside','prise','price','pride','bride','brine','bring','bling','blind','blend','bland','brand','bread','broad','brood','blood','flood','floor','flora','flour','flout','shout','spout','spurt','spurs','spare','spire','spite','spite','smite','smile','smile','smile','smile','while','white','whine','shine','chine','chime','crime','prime','pride','pride','trade','grade','grape','graph','graft','craft'
+].filter(w=>/^[a-z]{5}$/.test(w)).filter((v,i,a)=>a.indexOf(v)===i);
+
+const DICTS = {3:WORDS_3, 4:WORDS_4, 5:WORDS_5};
+
+// --- Utility functions ---
+const differByOne = (a,b) => {
+  if (a.length !== b.length) return false;
+  let diff = 0; for (let i=0;i<a.length;i++){ if (a[i]!==b[i]) diff++; if (diff>1) return false; }
+  return diff===1;
+}
+
+function neighbors(word, set){
+  const out = [];
+  for (const w of set){ if (w!==word && differByOne(w, word)) out.push(w); }
+  return out;
+}
+
+function bfsShortestPath(start, goal, set){
+  if (start===goal) return [start];
+  const q = [start];
+  const prev = new Map();
+  const seen = new Set([start]);
+  while(q.length){
+    const cur = q.shift();
+    for(const nb of neighbors(cur,set)){
+      if (seen.has(nb)) continue;
+      seen.add(nb); prev.set(nb, cur); q.push(nb);
+      if (nb===goal){ // reconstruct
+        const path = [goal];
+        let x = goal; while(prev.has(x)){ x = prev.get(x); path.push(x); if (x===start) break; }
+        return path.reverse();
+      }
+    }
+  }
+  return null;
+}
+
+// Choose a random valid puzzle (start -> goal with a path)
+function randomPuzzle(len){
+  const dict = DICTS[len];
+  const set = new Set(dict);
+  for (let tries=0; tries<500; tries++){
+    const start = dict[Math.floor(Math.random()*dict.length)];
+    let goal = dict[Math.floor(Math.random()*dict.length)];
+    if (start===goal) continue;
+    const path = bfsShortestPath(start, goal, set);
+    if (path && path.length>=3){
+      return { start, goal, path };
+    }
+  }
+  return null;
+}
+
+// --- Game State ---
+let game = {
+  length: 4,
+  start: '',
+  goal: '',
+  solution: [],
+  guesses: [],
+  won: false,
+  hard: false,
+};
+
+const $ladder = document.getElementById('ladder');
+const $log = document.getElementById('log');
+const $wins = document.getElementById('wins');
+const $streak = document.getElementById('streak');
+const $cstreak = document.getElementById('cstreak');
+
+const stats = JSON.parse(localStorage.getItem('wl_stats')||'{"wins":0,"streak":0,"cstreak":0}');
+updateStats();
+
+function log(msg){ const t = new Date().toLocaleTimeString(); $log.textContent = `[${t}] ${msg}\n` + $log.textContent; }
+
+function newPuzzle(len = game.length){
+  const p = randomPuzzle(len);
+  if (!p){ alert('Could not find a puzzle with current dictionary. Try another length or extend the word list.'); return; }
+  game.length = len; game.start=p.start; game.goal=p.goal; game.solution=p.path; game.guesses = Array(p.path.length).fill(''); game.guesses[0]=p.start; game.guesses[game.guesses.length-1]=p.goal; game.won=false; render();
+  log(`New puzzle (${len}-letter): ${p.start.toUpperCase()} → ${p.goal.toUpperCase()} (rungs: ${p.path.length})`);
+}
+
+function render(){
+  $ladder.innerHTML = '';
+  const steps = game.solution.length;
+  for (let i=0; i<steps; i++){
+    const fixed = (i===0 || i===steps-1) || (game.guesses[i] && game.guesses[i]===game.solution[i]);
+    const rung = document.createElement('div'); rung.className = 'rung'+(fixed?' fixed':'');
+
+    const idx = document.createElement('div'); idx.className='idx'; idx.textContent=(i+1);
+    const wordbox = document.createElement('div'); wordbox.className='wordbox';
+
+    const msg = document.createElement('div'); msg.className='msg';
+
+    const word = (i===0)?game.start:(i===steps-1)?game.goal:game.guesses[i]||'';
+
+    const inputs = [];
+    for (let c=0;c<game.length;c++){
+      const span = document.createElement('div'); span.className='char'; span.setAttribute('role','textbox'); span.setAttribute('aria-label',`Letter ${c+1}`);
+      span.contentEditable = (!fixed).toString();
+      span.textContent = word[c]?word[c].toUpperCase():'';
+      span.addEventListener('input', () => {
+        // sanitize to a single A-Z char
+        let t = span.textContent.replace(/[^a-zA-Z]/g,'').slice(-1).toLowerCase();
+        span.textContent = t.toUpperCase(); placeCaretAtEnd(span);
+        captureWord();
+      });
+      span.addEventListener('keydown', (e)=>{
+        if (e.key==='Enter') { e.preventDefault(); focusNext(inputs, span); }
+        if (e.key==='Backspace' && !span.textContent && c>0){ e.preventDefault(); inputs[c-1].focus(); }
+        if (/^[a-zA-Z]$/.test(e.key) && span.textContent){ // overwrite moves forward
+          setTimeout(()=>{ if(c<inputs.length-1) inputs[c+1].focus(); },0);
+        }
+        if (e.key==='ArrowLeft' && c>0){ e.preventDefault(); inputs[c-1].focus(); }
+        if (e.key==='ArrowRight' && c<inputs.length-1){ e.preventDefault(); inputs[c+1].focus(); }
+      });
+      inputs.push(span); wordbox.appendChild(span);
+    }
+
+    function captureWord(){
+      const typed = inputs.map(x=>x.textContent.toLowerCase()).join('');
+      if (typed.length===game.length){ game.guesses[i]=typed; }
+      validate(i, inputs, msg);
+      checkWin();
+    }
+
+    rung.appendChild(wordbox);
+    rung.appendChild(idx);
+    rung.appendChild(msg);
+    $ladder.appendChild(rung);
+
+    // Initial validation display
+    validate(i, inputs, msg);
+  }
+}
+
+function validate(i, inputs, msgEl){
+  const steps = game.solution.length;
+  const word = (i===0)?game.start:(i===steps-1)?game.goal:game.guesses[i]||'';
+  const dict = new Set(DICTS[game.length]);
+
+  // Clear classes
+  for (const el of inputs) el.classList.remove('ok','err');
+
+  if (i===0 || i===steps-1){ msgEl.textContent = (i===0?'Start word':'Goal word'); return; }
+
+  if (word.length!==game.length){ msgEl.textContent=''; return; }
+
+  if (!dict.has(word)){
+    for (const el of inputs) el.classList.add('err');
+    msgEl.textContent = 'Not in dictionary';
+    return;
+  }
+
+  // adjacency checks
+  const prev = game.guesses[i-1]||game.start;
+  const next = game.guesses[i+1]||game.goal;
+  const okPrev = differByOne(prev, word);
+  const okNext = differByOne(word, next);
+
+  if (!okPrev){ for (const el of inputs) el.classList.add('err'); msgEl.textContent='Must differ by 1 from previous'; return; }
+  if (game.hard && !isOnSomeShortestPath(i, word)){
+    for (const el of inputs) el.classList.add('err'); msgEl.textContent='Hard mode: keep to a shortest path'; return;
+  }
+
+  for (const el of inputs) el.classList.add('ok');
+  msgEl.textContent = okNext ? 'Good!' : 'Looks good so far';
+}
+
+function isOnSomeShortestPath(i, word){
+  // In hard mode, require that from guesses[i-1] to goal via `word` is still shortest
+  const dict = new Set(DICTS[game.length]);
+  const fromPrev = bfsShortestPath(game.guesses[i-1]||game.start, game.goal, dict);
+  const viaWordA = bfsShortestPath(game.guesses[i-1]||game.start, word, dict);
+  const viaWordB = bfsShortestPath(word, game.goal, dict);
+  if (!fromPrev || !viaWordA || !viaWordB) return false;
+  return (viaWordA.length + viaWordB.length - 1) === fromPrev.length; // -1 to not double-count `word`
+}
+
+function checkWin(){
+  const done = game.guesses.every((w, idx) => {
+    if (idx===0) return w===game.start; if (idx===game.guesses.length-1) return w===game.goal;
+    return w && /^[a-z]{1,}$/.test(w) && w.length===game.length;
+  });
+  if (!done || game.won) return;
+
+  // validate each step is one-letter change and in dict
+  const dict = new Set(DICTS[game.length]);
+  for (let i=1;i<game.guesses.length;i++){
+    const a = game.guesses[i-1]; const b = game.guesses[i];
+    if (!differByOne(a,b) || !dict.has(b)) return; // invalid sequence
+  }
+
+  game.won = true;
+  stats.wins++; stats.cstreak++; stats.streak = Math.max(stats.streak, stats.cstreak);
+  persistStats(); updateStats();
+  log(`Solved! Path: ${game.guesses.map(w=>w.toUpperCase()).join(' → ')}`);
+  setTimeout(()=>{ alert('Great job! You completed the ladder.'); }, 10);
+}
+
+function placeCaretAtEnd(el){
+  const range = document.createRange(); range.selectNodeContents(el); range.collapse(false);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+}
+
+function focusNext(inputs, current){
+  const idx = inputs.indexOf(current);
+  if (idx < inputs.length-1) inputs[idx+1].focus();
+  else {
+    // move to the next rung's first editable cell
+    const rings = Array.from(document.querySelectorAll('.rung'));
+    const my = current.closest('.rung'); const i = rings.indexOf(my);
+    for (let j=i+1;j<rings.length;j++){
+      const edit = rings[j].querySelector('.char[contenteditable="true"]');
+      if (edit){ edit.focus(); return; }
+    }
+  }
+}
+
+function giveHint(){
+  if (game.hard) { alert('Hints are disabled in Hard mode.'); return; }
+  const idx = game.guesses.findIndex((w,i)=> (i>0 && i<game.guesses.length-1 && w!==game.solution[i]));
+  if (idx === -1) return;
+  game.guesses[idx] = game.solution[idx];
+  render();
+  log(`Hint: filled rung ${idx+1} with ${game.solution[idx].toUpperCase()}`);
+}
+
+function giveUp(){
+  if (!confirm('Reveal the solution?')) return;
+  game.guesses = [...game.solution];
+  game.won = true; // treat as finished, but do not add to streak
+  stats.cstreak = 0; persistStats(); updateStats();
+  render(); log(`Solution revealed: ${game.solution.map(w=>w.toUpperCase()).join(' → ')}`);
+}
+
+function persistStats(){ localStorage.setItem('wl_stats', JSON.stringify(stats)); }
+function updateStats(){ $wins.textContent = stats.wins; $streak.textContent = stats.streak; $cstreak.textContent = stats.cstreak; }
+
+// --- Wire up controls ---
+const $len = document.getElementById('length');
+const $new = document.getElementById('new');
+const $hint = document.getElementById('hint');
+const $giveup = document.getElementById('giveup');
+const $hard = document.getElementById('hardmode');
+
+$len.addEventListener('change', () => { newPuzzle(parseInt($len.value,10)); });
+$new.addEventListener('click', () => { newPuzzle(parseInt($len.value,10)); });
+$hint.addEventListener('click', giveHint);
+$giveup.addEventListener('click', giveUp);
+$hard.addEventListener('change', () => { game.hard = $hard.checked; log(`Hard mode ${game.hard? 'enabled':'disabled'}`); render(); });
+
+// Boot
+newPuzzle(4);
+</script>
+</body>
+</html>
