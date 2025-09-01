@@ -268,11 +268,15 @@ function render(){
       span.contentEditable = (!fixed).toString();
       span.textContent = word[c]?word[c].toUpperCase():'';
       span.addEventListener('input', () => {
-        // sanitize to a single A-Z char
-        let t = span.textContent.replace(/[^a-zA-Z]/g,'').slice(-1).toLowerCase();
-        span.textContent = t.toUpperCase(); placeCaretAtEnd(span);
-        captureWord();
-      });
+  // sanitize to a single A-Z char
+  let t = span.textContent.replace(/[^a-zA-Z]/g,'').slice(-1).toLowerCase();
+  span.textContent = t.toUpperCase(); placeCaretAtEnd(span);
+  captureWord();
+  // Move to next cell if a letter was entered
+  if (t && c < inputs.length - 1) {
+    inputs[c + 1].focus();
+  }
+});
       span.addEventListener('keydown', (e)=>{
         if (e.key==='Enter') { e.preventDefault(); focusNext(inputs, span); }
         if (e.key==='Backspace' && !span.textContent && c>0){ e.preventDefault(); inputs[c-1].focus(); }
