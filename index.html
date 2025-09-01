@@ -72,6 +72,7 @@
           <div class="row">
             <button id="new" class="primary">New Puzzle</button>
             <button id="hint" class="ghost">Hint</button>
+            <button id="reset" class="ghost">Reset</button>
             <button id="giveup" class="ghost">Give Up</button>
           </div>
           <div class="row">
@@ -401,6 +402,16 @@ function giveUp(){
   render(); log(`Solution revealed: ${game.solution.map(w=>w.toUpperCase()).join(' → ')}`);
 }
 
+function resetPuzzle() {
+  // Keep the current start, goal, solution, and length. Reset guesses to initial.
+  game.guesses = Array(game.solution.length).fill('');
+  game.guesses[0] = game.start;
+  game.guesses[game.guesses.length - 1] = game.goal;
+  game.won = false;
+  render();
+  log('Puzzle reset. All attempts cleared.');
+}
+
 function persistStats(){ localStorage.setItem('wl_stats', JSON.stringify(stats)); }
 function updateStats(){ $wins.textContent = stats.wins; $streak.textContent = stats.streak; $cstreak.textContent = stats.cstreak; }
 
@@ -409,6 +420,8 @@ const $len = document.getElementById('length');
 const $new = document.getElementById('new');
 const $hint = document.getElementById('hint');
 const $giveup = document.getElementById('giveup');
+const $reset = document.getElementById('reset');
+$reset.addEventListener('click', resetPuzzle);
 const $hard = document.getElementById('hardmode');
 
 $len.addEventListener('change', () => { newPuzzle(parseInt($len.value,10)); });
